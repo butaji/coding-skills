@@ -1,82 +1,107 @@
 ---
 name: lisp-mindset
 description: >
-  Apply a Lisp mindset to software design and coding: model problems as data,
-  grow small domain languages, derive state, and compose declarative operations
-  with clear contracts. Use when designing architecture, refactoring, modeling
-  nested data, or simplifying repeated logic. Not for language-specific Common
-  Lisp or Clojure syntax advice.
+  Write the smallest correct program by thinking like a Lisper: everything is
+  data, one representation per fact, derived state, patterns over branches,
+  a composable domain language, and effects at the edges. Use when writing,
+  refactoring, or reviewing code, designing data models or architecture, or
+  when code feels repetitive, branchy, or larger than the problem. Not for
+  Common Lisp or Clojure syntax questions.
 ---
 
 # Lisp Mindset Manifesto
 
-1. Represent the problem as data.
-2. Keep one canonical representation of each fact.
-3. Derive views from canonical facts instead of synchronizing copies.
-4. Separate values, identities, and state. For event-backed state,
-   `state = memo(f(events))`.
-5. Make behavior and state transitions explicit.
-6. Describe stable rules declaratively as data.
-7. Dispatch on meaningful variants when repeated branches obscure the pattern.
-8. Grow a small domain language from reusable operators.
-9. Compose operators through clear input, output, and failure contracts.
-10. Preserve the laws that make reusable operations compose.
-11. Separate fixed inputs from changing inputs; specialize repeated work when it
-    helps.
-12. Keep effects visible and at boundaries.
-13. Deduplicate knowledge, rather than merely similar syntax.
+Every line carries domain meaning. Code is a liability; data is leverage.
+Model the data (1–3), derive the rest (4–6), speak the domain's language
+(7–8), and keep the core honest (9–10).
 
-## How to apply
+1. **Everything is data.** Model the domain, its rules, and its config as plain
+   data before writing any function. When code feels awkward, the model is
+   wrong — fix the data.
+2. **Unification is king.** Seek the one representation in which separate
+   cases become the same case. Fewer shapes, fewer functions.
+3. **One fact, one representation.** Every fact lives in exactly one place. No
+   copies to sync, no flags that can drift.
+4. **Derive everything else.** Views, flags, totals, and caches are functions
+   of the facts. Build new values from old ones instead of mutating shared
+   ones.
+5. **State = memo(f(events)).** An identity is a sequence of values over time;
+   its current state is the fold of its events, cached when needed.
+6. **Behavior = state machines.** Name every state and every transition; make
+   invalid states unrepresentable.
+7. **Patterns over branches.** Dispatch on the shape of data — tables, maps,
+   unions, pattern matching — instead of `if`/`switch` chains. Stable rules
+   become data, prepared once and applied to changing inputs.
+8. **Grow a domain language by composition.** Build small operators in the
+   domain's vocabulary with uniform input, output, and failure shapes; compose
+   them until the top level reads as the domain:
+   `validate(required("email"), maxLen("name", 80))`. Prefer this to base
+   classes and config-driven engines, and keep the laws callers rely on — an
+   empty validator changes nothing; `parse(print(x)) == x`.
+9. **Effects stay explicit and at the edges.** The core is pure; I/O, network,
+   clock, and env live at the boundary. A function either computes or acts,
+   never both.
+10. **DRY knowledge, not syntax.** Each rule has one home. Code that looks
+    alike but encodes different rules stays separate.
 
-- **Model before implementing** (1–3): name the data shapes and their
-  invariants. Store each fact once; compute dependent views from that source.
-- **Model change deliberately** (4–5): distinguish an identity from its current
-  value and name valid transitions. When replay or history matters, derive state
-  from events and cache the result where useful. A state machine helps when
-  transitions and invalid states need to be explicit.
-- **Make rules readable** (6–7): express stable domain rules as data or small
-  transformations. Use a table or dispatch function when cases share a shape;
-  keep a direct conditional when it is clearer.
-- **Grow the language bottom up** (8–9): build small domain operators that make
-  the program read in its own vocabulary. Compose them through explicit inputs,
-  outputs, and failure behavior; add syntax or a DSL when it clarifies repeated
-  domain work.
-- **State composition laws** (10): for reusable reducers, mappers, parsers, or
-  serializers, identify relevant identities, associativity, or round trips.
-  Check the laws that callers rely on; do not invent laws for unrelated APIs.
-- **Stage recurring work** (11): prepare a stable rule set or schema once when
-  it is reused with changing inputs and doing so improves clarity or cost.
-- **Contain effects** (12): make I/O and shared-state changes easy to find;
-  keep value transformations independent of them where practical.
-- **Abstract knowledge** (13): give one domain rule one home. Similar-looking
-  code can remain separate when it represents different knowledge.
+## Reduction pass
 
-## Worked example
+Once it works, before finishing, remove:
 
-Task: validate many records against the same set of domain rules.
+- helpers with one call site that don't name a domain concept → inline them
+- parallel `if`/`switch` arms → a table (7)
+- stored values derivable from others → compute them (4)
+- defensive checks for states the model already excludes
+- wrappers that only rename or re-export library calls
+- comments that restate code; unused params, flags, and branches
+- configurability nobody asked for
 
-- Represent the rules as data and name their invariants (1, 6).
-- Build small validators that accept a value and return the same error shape;
-  compose them into a domain-specific validator (8–9).
-- Prepare the fixed rules once, then validate each changing record (11).
-- Define an empty validator as the identity: adding it leaves the result
-  unchanged. Specify how composed validators combine errors (10).
-- Read records and report errors at the boundary; keep validation itself free
-  of I/O (12).
+Stop when removing anything more would lose meaning.
 
-## Practical standards
+## Example
 
-- **Zero magic numbers:** name domain limits, timeouts, and conversion factors
-  so their purpose and units are clear. Self-evident values such as `0` for an
-  empty sum or `1` for an increment can stay inline.
-- Treat functions over 40 lines or complexity over 10, and files over 500
-  lines, as prompts to review structure. Split when doing so improves clarity.
+Before — the knowledge is buried in control flow:
+
+```ts
+function shippingCost(order) {
+  if (order.region === "US") {
+    return order.express ? 25 : 5;
+  } else if (order.region === "EU") {
+    return order.express ? 30 : 8;
+  } else {
+    return order.express ? 50 : 15;
+  }
+}
+```
+
+After — the table is the spec, the logic is one line:
+
+```ts
+const SHIPPING = {
+  US:    { standard: 5,  express: 25 },
+  EU:    { standard: 8,  express: 30 },
+  OTHER: { standard: 15, express: 50 },
+};
+
+const shippingCost = ({ region, express }) =>
+  (SHIPPING[region] ?? SHIPPING.OTHER)[express ? "express" : "standard"];
+```
 
 ## Guardrails
 
-- Preserve the host language's idioms; the mindset does not require Lisp syntax.
-- Prefer a direct loop, conditional, or local mutation when it communicates the
-  behavior more clearly than a pipeline or DSL.
-- Keep compositions shallow and named. A long chain can hide the domain logic.
-- A new operator should clarify its uses; avoid helpers that only rename one
-  call site.
+- Preserve the host language's idioms — the mindset, not Lisp syntax.
+- Explicit structure, not theatrics: a plain loop or local mutation beats a
+  clever pipeline or forced recursion when it reads better. Clarity wins ties;
+  fewer lines win the rest.
+- Keep compositions shallow and named; a 15-stage pipeline hides as much as a
+  15-branch function.
+- Grow the language from real domain patterns, not speculation. Every helper
+  must earn its call site.
+
+## Technical appendix
+
+- **Functions ≤ 40 lines, cyclomatic complexity ≤ 10.** Split along a domain
+  seam, never exempt.
+- **Files ≤ 500 lines.** Split by domain concept.
+- **No magic numbers.** Name domain limits, timeouts, and conversion factors
+  with their units (`SESSION_TIMEOUT_MS`); `0`, `1`, and `""` stay inline.

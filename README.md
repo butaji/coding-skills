@@ -7,7 +7,7 @@ Agent Skills ecosystem (`npx skills`, skills.sh).
 
 | Skill | Description |
 | --- | --- |
-| [`lisp-mindset`](skills/lisp-mindset/) | Lisp mindset for design and code: model problems as data, grow small domain languages, derive state, and compose declarative operations with clear contracts. |
+| [`lisp-mindset`](skills/lisp-mindset/) | Lisp mindset for design and code: everything is data, one representation per fact, derived state, patterns over branches, a composable domain language, effects at the edges. |
 
 ## Install
 
